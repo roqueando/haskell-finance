@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-lite@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-embed"></script>
+</head>
+<body>
+<div id="vis"></div>
+<script type="text/javascript">
+  var spec = {"$schema":"https://vega.github.io/schema/vega-lite/v4.json","background":"rgba(0, 0, 0, 0.05)","data":{"url":"https://vega.github.io/vega-datasets/data/cars.json"},"encoding":{"color":{"field":"Origin"},"x":{"field":"Horsepower","type":"quantitative"},"y":{"field":"Miles_per_Gallon","title":"Miles per Gallon","type":"quantitative"}},"height":800,"mark":{"tooltip":{"content":"encoding"},"type":"circle"},"width":600};
+  vegaEmbed('#vis', spec).then(function(result) {
+  // Access the Vega view instance (https://vega.github.io/vega/docs/api/view/) as result.view
+  }).catch(console.error);
+</script>
+</body>
+</html>
