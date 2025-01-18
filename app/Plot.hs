@@ -8,8 +8,13 @@ import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import qualified RIO.Text as T
 import Graphics.Vega.VegaLite
-import Prelude hiding (filter, lookup, repeat)
+import Prelude hiding (filter, lookup)
+import Data.List (tails)
 
+data Stock = AMZN
+           | DPZ
+           | BTC
+           | NFLX
 
 data PriceInfoT = PriceInfo
   { date :: T.Text
@@ -28,26 +33,18 @@ instance FromNamedRecord PriceInfoT where
         <*> v .: "BTC"
         <*> v .: "NFLX"
 
-readFromFile :: IO ()
-readFromFile = do
+-- | read data from CSV and plot to a html file
+readDataAndPlot :: IO ()
+readDataAndPlot = do
   csvFile <- BS.readFile "portfolio_data.csv"
   let decoded = decodeByName csvFile :: Either String (Header, V.Vector PriceInfoT)
   case decoded of
     Left e -> print e
     Right (_, result) ->
-        let transformed = transformPriceInfo result
-         in toHtmlFile "prices.html" $ plotSomePrice transformed
+        let transformed = transformPriceInfoByStock result AMZN
+         in toHtmlFile "prices.html" $ plotStockPrices transformed
 
-plotSomething :: IO ()
-plotSomething = do
-    let cars = dataFromUrl "https://vega.github.io/vega-datasets/data/cars.json" []
-        enc = encoding
-                . position X [PName "Horsepower", PmType Quantitative]
-                . position Y [PName "Miles_per_Gallon", PmType Quantitative, PTitle "Miles per Gallon"]
-                . color [MName "Origin"]
-        bkg = background "rgba(0, 0, 0, 0.05)"
-     in toHtmlFile "result.html" $ toVegaLite [bkg, cars, mark Circle [MTooltip TTEncoding], enc [], height 800, width 600]
-
+-- | transform a vector of price info into a tuple data with date, name and price
 transformPriceInfo :: V.Vector PriceInfoT -> [(T.Text, T.Text, Double)]
 transformPriceInfo ps = concatMap toRows (V.toList ps)
     where
@@ -58,8 +55,18 @@ transformPriceInfo ps = concatMap toRows (V.toList ps)
             , (date pinfo, "NFLX", netflix pinfo)
             ]
 
-plotSomePrice :: [(T.Text, T.Text, Double)] -> VegaLite
-plotSomePrice ps =
+-- | same as `transformPriceInfo` but filtering by one stock
+transformPriceInfoByStock :: V.Vector PriceInfoT -> Stock -> [(T.Text, T.Text, Double)]
+transformPriceInfoByStock ps st = concatMap (toRows st) (V.toList ps)
+    where
+        toRows AMZN pinfo = [(date pinfo, "AMZN", amazon pinfo)]
+        toRows DPZ pinfo = [(date pinfo, "DPZ", dpz pinfo)]
+        toRows BTC pinfo = [(date pinfo, "BTC", bitcoin pinfo)]
+        toRows NFLX pinfo = [(date pinfo, "NFLX", netflix pinfo)]
+
+-- | plot all stock prices by color
+plotStockPrices :: [(T.Text, T.Text, Double)] -> VegaLite
+plotStockPrices ps =
     let dataValues = dataFromRows [Parse [("Date", FoDate "%m/%d/%Y")]]
                     . foldr mapToPriceInfo id ps
         enc = encoding
@@ -72,3 +79,21 @@ plotSomePrice ps =
     where
         mapToPriceInfo (d, s, p) acc =
             acc . dataRow [("Date", Str d), ("Stock", Str s), ("Price", Number p)]
+
+
+-- | exponential weighted moving average
+movingAvg :: [Double] -> Double
+movingAvg [] = 0.0
+movingAvg (x:xs) = a * x + (1.0 - a) * movingAvg xs
+    where
+        a = 0.95
+
+-- | arithmetic mean
+mean :: [Double] -> Double
+mean xs = sum xs / fromIntegral (length xs)
+
+mAvg :: [Double] -> Int -> [Double]
+mAvg [] _ = [0.0]
+mAvg xs n = map ((\a -> a / fromIntegral n) . sum) (window' n xs)
+    where
+        window' wn = foldr (zipWith (:)) (Prelude.repeat []) . take wn . tails
